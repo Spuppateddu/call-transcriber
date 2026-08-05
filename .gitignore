@@ -1,0 +1,32 @@
+# whisper.cpp is cloned and built by install.sh (not versioned)
+/whisper.cpp/
+
+# Sessions: transcripts and audio recordings
+/sessions/
+
+# Downloaded models (large files)
+*.bin
+ggml-*.bin
+
+# Temporary / audio files
+*.wav
+*.mp3
+*.log
+
+# Transcripts. './transcribe.sh <audio-file>' writes its .txt (and whisper its
+# .srt) next to the audio — which is this directory whenever you point it at a
+# file you dropped here — and a transcript is as private as the call it came
+# from. Ignored by extension so one can never ride along in a 'git add -A'.
+# Everything here that IS meant to be tracked uses another extension (.md, .sh)
+# or none (LICENSE); if that ever changes, 'git add -f' the new file.
+*.txt
+*.srt
+
+# Saved answers written by start.sh (personal, per-machine)
+/config.env
+
+# OS / editor
+.DS_Store
+*~
+.vscode/
+.idea/
