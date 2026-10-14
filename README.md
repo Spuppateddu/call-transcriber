@@ -177,13 +177,13 @@ PC_SRC=alsa_output.pci-0000_00_1f.3.analog-stereo.monitor ./start.sh
 ```
 
 The first time, it **asks a few questions** (microphone, PC audio, language,
-model, live draft on/off) and lists every valid answer — just press **Enter**
-at each to take the default, so there's nothing to memorize. At the end it
-offers to **remember your answers** in a `config.env` file. On every later run
-it then **shows your saved setup and asks whether to keep it or change it** —
-keep to start recording right away, or change to answer the questions again.
-Delete `config.env` to wipe it entirely. The environment variables below still
-work and override the saved answers.
+model, live draft on/off, transcribe right after or later by hand) and lists
+every valid answer — just press **Enter** at each to take the default, so
+there's nothing to memorize. At the end it offers to **remember your answers**
+in a `config.env` file. On every later run it then **shows your saved setup and
+asks whether to keep it or change it** — keep to start recording right away, or
+change to answer the questions again. Delete `config.env` to wipe it entirely.
+The environment variables below still work and override the saved answers.
 
 > `config.env` is *sourced*, so whatever is in it runs as you. `start.sh` writes
 > it `0600` and refuses to read it back if it is not owned by you and closed to
@@ -218,7 +218,7 @@ sessions/2026-07-14_21-00-00/
 MIC_SRC=... PC_SRC=... ./start.sh # preset the devices (pactl list short sources)
 LANG_CODE=en ./start.sh          # force a language (default: auto-detect)
 MODEL=small ./start.sh           # force a model for the final transcription
-AUTO_TRANSCRIBE=0 ./start.sh     # record only, transcribe later (see below)
+AUTO_TRANSCRIBE=0 ./start.sh     # record only, transcribe later by hand (see below)
 LIVE=0 ./start.sh                # no live draft, just the timer
 LIVE_CHUNK=20 ./start.sh         # live draft updates every 20 s instead of 30
 LIVE_MODEL=base ./start.sh       # force the model used for the live draft
@@ -228,6 +228,11 @@ LIVE_THREADS=2 ./start.sh        # cores for the live draft (default: half of th
 Any of these can also be kept in `config.env` so they apply to every run — use
 the same `: ${VAR:=value}` form `start.sh` writes, so a value you pass on the
 command line still wins over the saved one.
+
+**Record-only machines.** If no whisper model is installed, `start.sh` switches
+to record-only by itself (no live draft, no transcription at the end): it only
+needs `parec`, `ffmpeg` and `pgrep`. Copy the session folder to a machine that
+has whisper and run `./transcribe.sh` there (see section 4).
 
 ---
 

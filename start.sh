@@ -25,6 +25,7 @@
 #   LANG_CODE=en        spoken language (default: auto-detect)
 #   MODEL=small         whisper model for the transcription at the end
 #   AUTO_TRANSCRIBE=0   record only; transcribe later with ./transcribe.sh
+#                       (automatic when no whisper model is installed here)
 #   LIVE=0              disable the live draft in the terminal
 #   LIVE_MODEL=base     model for the live draft (default: base on a CPU build,
 #                       the best of medium/small/base on a CUDA build)
@@ -37,7 +38,6 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/lib.sh"
 WHISPER_DIR="$HERE/whisper.cpp"
-AUTO_TRANSCRIBE="${AUTO_TRANSCRIBE:-1}"
 
 # pgrep is what kill_tree walks the process tree with: without it, stopping the
 # live draft would only signal its shell and leave the whisper run underneath it
@@ -62,6 +62,7 @@ CLI_PC_SRC="${PC_SRC:-}"
 CLI_LANG_CODE="${LANG_CODE:-}"
 CLI_MODEL="${MODEL:-}"
 CLI_LIVE="${LIVE:-}"
+CLI_AUTO_TRANSCRIBE="${AUTO_TRANSCRIBE:-}"
 
 # True if a file is ours and carries no group/other bits at all — i.e. only we
 # can write it. Sourcing a file runs whatever is in it, so write access to
@@ -250,6 +251,7 @@ if [ "$CONFIG_LOADED" = "1" ] && [ -e /dev/tty ]; then
     echo "      Language:   ${LANG_CODE:-auto}"
     echo "      Model:      ${MODEL:-<best installed>}"
     echo "      Live draft: $([ "${LIVE:-1}" = "0" ] && echo off || echo on)"
+    echo "      Transcribe: $([ "${AUTO_TRANSCRIBE:-1}" = "0" ] && echo 'later, by hand' || echo 'right after recording')"
     keep="$(ask 'Use this setup? [Y = keep / n = change it]: ')"
     case "$keep" in
         n|N|no|NO)
@@ -258,9 +260,20 @@ if [ "$CONFIG_LOADED" = "1" ] && [ -e /dev/tty ]; then
             LANG_CODE="$CLI_LANG_CODE"
             MODEL="$CLI_MODEL"
             LIVE="$CLI_LIVE"
+            AUTO_TRANSCRIBE="$CLI_AUTO_TRANSCRIBE"
             ;;
     esac
     echo
+fi
+
+# A machine with no whisper model (one that only records, and sends the audio
+# to another box to transcribe) cannot transcribe or draft anything: record
+# only, and do not offer a live draft that would just fail to start.
+NO_MODEL=0
+if ! best_model "$WHISPER_DIR" >/dev/null; then
+    NO_MODEL=1
+    AUTO_TRANSCRIBE=0
+    LIVE="${LIVE:-0}"
 fi
 
 if [ -e /dev/tty ]; then
@@ -359,6 +372,24 @@ Pick the output you actually LISTEN through (headset, speakers...):" \
         ASKED+=("LIVE")
     fi
 
+    # 6) Transcribe as soon as the recording stops, or leave it for later —
+    #    e.g. to copy the session to a faster machine and transcribe it there.
+    #    Not asked without a model: then recording only is the one option.
+    if [ -z "${AUTO_TRANSCRIBE:-}" ]; then
+        maybe_header
+        echo
+        echo "When to transcribe?"
+        echo "   1) right after   - starts by itself when you press Ctrl+C (default)"
+        echo "   2) later, by hand - record only; run ./transcribe.sh when you want"
+        echo "                       (here or on another machine)"
+        c="$(ask 'Choice [1]: ')"
+        case "$c" in
+            2) AUTO_TRANSCRIBE="0" ;;
+            *) AUTO_TRANSCRIBE="1" ;;
+        esac
+        ASKED+=("AUTO_TRANSCRIBE")
+    fi
+
     [ "$HEADER_SHOWN" = "1" ] && echo
 fi
 
@@ -368,6 +399,7 @@ MIC_SRC="${MIC_SRC:-$DEFAULT_MIC}"
 PC_SRC="${PC_SRC:-$DEFAULT_PC}"
 LANG_CODE="${LANG_CODE:-auto}"
 LIVE="${LIVE:-1}"
+AUTO_TRANSCRIBE="${AUTO_TRANSCRIBE:-1}"
 # live.sh is a separate process, so it reads all of these from the ENVIRONMENT.
 # A 'LIVE_CHUNK=20 ./start.sh' prefix exports for free, which is why the live
 # options appeared to work; set the same thing in config.env and it is sourced
@@ -397,6 +429,9 @@ if [ -e /dev/tty ] && [ "${#ASKED[@]}" -gt 0 ]; then
                 printf ': ${LANG_CODE:=%q}\n' "$LANG_CODE"
                 [ -n "${MODEL:-}" ] && printf ': ${MODEL:=%q}\n' "$MODEL"
                 printf ': ${LIVE:=%q}\n'      "$LIVE"
+                # Forced off by a missing model, not chosen: do not remember it.
+                [ "$NO_MODEL" = "0" ] && \
+                    printf ': ${AUTO_TRANSCRIBE:=%q}\n' "$AUTO_TRANSCRIBE"
             } > "$CONFIG_FILE"
             echo "==> Saved to config.env — you won't be asked again."
             echo
@@ -431,13 +466,17 @@ esac
 # deleted. Resolve it NOW: discovering it only when transcribing would mean
 # sitting through the whole call before finding out. Done after the save prompt
 # above so an auto-picked model is never written into config.env as a choice.
-if [ -n "${MODEL:-}" ] && ! model_file "$WHISPER_DIR" "$MODEL" >/dev/null; then
+if [ "$NO_MODEL" = "1" ]; then
+    echo "==> No whisper model installed here: RECORD-ONLY mode."
+    echo "    Transcribe the session later, here or on another machine."
+    MODEL=""
+elif [ -n "${MODEL:-}" ] && ! model_file "$WHISPER_DIR" "$MODEL" >/dev/null; then
     echo "WARNING: the requested model '$MODEL' is not installed." >&2
     echo "         Expected: $MODELS_DIR/ggml-$MODEL.bin" >&2
     echo "         Get it back with:  MODEL=$MODEL ./install.sh" >&2
     MODEL=""
 fi
-if [ -z "${MODEL:-}" ]; then
+if [ "$NO_MODEL" = "0" ] && [ -z "${MODEL:-}" ]; then
     MODEL="$(best_model "$WHISPER_DIR")" || {
         echo "ERROR: no whisper model installed — nothing could transcribe this" >&2
         echo "       recording. Run ./install.sh first." >&2
@@ -528,7 +567,11 @@ if [ "$LIVE" = "1" ]; then
 fi
 
 echo
-echo "==> RECORDING — go ahead and talk. Press Ctrl+C to stop and transcribe."
+if [ "$AUTO_TRANSCRIBE" = "1" ]; then
+    echo "==> RECORDING — go ahead and talk. Press Ctrl+C to stop and transcribe."
+else
+    echo "==> RECORDING (record only) — go ahead and talk. Press Ctrl+C to stop."
+fi
 START_TS="$(date +%s)"
 while [ -z "$STOP" ]; do
     sleep 1 || true
