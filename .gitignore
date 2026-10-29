@@ -25,6 +25,10 @@ ggml-*.bin
 # Saved answers written by start.sh (personal, per-machine)
 /config.env
 
+# Your rules for the summarize-transcript skill (personal; can name clients)
+/summary-rules.md
+/summary-rules/
+
 # OS / editor
 .DS_Store
 *~

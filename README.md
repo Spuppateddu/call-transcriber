@@ -259,8 +259,19 @@ a recording made elsewhere, e.g. a voice memo or a downloaded meeting file:
 
 A raw transcript of a 2-hour call is long. The companion skill
 **[`summarize-transcript`](https://github.com/Spuppateddu/skills/tree/main/summarize-transcript)**
-turns it into a readable summary with a **local LLM** (llama.cpp), so the
-recording never leaves your machine:
+turns it into a readable summary. It's an [Agent Skill](https://agentskills.io):
+once the [skills repo](https://github.com/Spuppateddu/skills) is installed, your
+coding agent (Claude Code, Codex, Cursor, opencode…) uses it on its own when
+you say *"summarize sessions/2026-07-14_21-00-00"* — see that repo's README for
+the one-command install. The summary lands next to the transcript, as
+`transcript-summary.txt`.
+
+**Which model writes it.** The one your chat is already running on: open the
+chat in Claude Code and Claude writes it, open it in Codex and Codex's current
+model does. Nobody asks you which model to use. Want a different one? Say so in
+the request — *"summarize it with codex"*, *"use the local model"*. The local
+model (llama.cpp) runs fully offline, so the recording never leaves your
+machine; its script also works without any agent:
 
 ```bash
 git clone git@github.com:Spuppateddu/skills.git ~/code/skills
@@ -269,15 +280,29 @@ bash ~/code/skills/summarize-transcript/scripts/summarize.sh \
 # -> sessions/2026-07-14_21-00-00/transcript-summary.txt
 ```
 
-It's an [Agent Skill](https://agentskills.io), so once the
-[skills repo](https://github.com/Spuppateddu/skills) is installed your coding
-agent (Claude Code, Codex, Cursor, opencode…) triggers it on its own when you
-say *"summarize this transcript"* — see that repo's README for the one-command
-install. The script also runs standalone, as above.
+**Your summary rules.** To shape the summary — sections, length, what to leave
+out, how to spell names — write rules files in the folder where you start the
+chat (for this repo: its root). Use one `summary-rules.md`, or a
+`summary-rules/` folder with one file per kind of recording:
 
-Prefer a cloud model instead? Just upload `transcript.txt` to your favorite
-LLM. The file starts with a comment explaining the `[ME]` / `[THEM]` labels, so
-the model has the context it needs.
+```
+summary-rules/
+├── lavoro.md   ← work calls: decisions, open points, next steps
+└── gdr.md      ← RPG sessions: only the story, plain text, no dice talk
+```
+
+Start each file with a line saying what it is for. The agent picks the file
+that fits the transcript, or the one you name (*"summarize it with the gdr
+rules"*), and asks only when it can't tell. It follows those rules over its
+defaults. Keep the rules somewhere else? Name the path in the request:
+*"summarize it with the rules in ~/clients/acme/"* (a file, or a folder holding
+them). The local script takes one file as `SUMMARY_RULES=summary-rules/gdr.md`.
+`summary-rules.md` and `summary-rules/` are gitignored here, since they're
+personal and can name clients or people.
+
+Prefer a chatbot instead? Just upload `transcript.txt` (and your rules) to your
+favorite LLM. The file starts with a comment explaining the `[ME]` / `[THEM]`
+labels, so the model has the context it needs.
 
 ---
 
